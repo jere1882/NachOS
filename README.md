@@ -1,2 +1,1 @@
 # NachOS
-Operating System NachOS
