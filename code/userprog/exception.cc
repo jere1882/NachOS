@@ -25,6 +25,10 @@
 #include "syscall.h"
 #include "threads/system.hh"
 
+#define MAXNAMELENGTH 256   // Length limit for file names
+
+#define SYSC_OK      0      // Succesful signal execution return vale 
+#define SYSC_ERROR  -1      // Error signal execution return value
 
 /// Entry point into the Nachos kernel.  Called when a user program is
 /// executing, and either does a syscall, or generates an addressing or
@@ -44,14 +48,89 @@
 ///
 /// * `which` is the kind of exception.  The list of possible exceptions is
 ///   in `machine.hh`.
+
+
+
+void ReadStringFromUser (int userAddress, char *outString, unsigned maxByteCount) {
+    int buf;
+    unsigned i;
+    for (i = 0; i<maxByteCount ; i++) { 
+        if (machine->ReadMem(userAddress+i, 1, &buf)) 
+            break;
+        else if (buf=='\0') {
+            outString[i] = buf;
+            break;
+        } 
+        else
+            outString[i] = buf;
+    }
+}
+
+void ReadBufferFromUser (int userAddress, char *outBuffer, unsigned byteCount) {
+    unsigned i;
+    int buf;
+    for (i = 0; i<byteCount ; i++) {
+        if (machine->ReadMem(userAddress+i, 1, &buf)) 
+            break;
+        else
+            outBuffer[i] = buf;
+    }
+}
+
+void WriteStringToUser (const char *string, int userAddress){
+    int i;    
+    for (i=0 ; string[i]!='\0' ; i++){
+       if (machine->WriteMem(userAddress+i, 1, string[i]))
+           break;
+    }   
+ 
+    machine->WriteMem(userAddress+i, 1, '\0');
+}
+
+
+void WriteBufferToUser (const char *buffer, int userAddress, unsigned byteCount){
+    unsigned i;    
+    for (i=0 ; i< byteCount ; i++){
+       if (machine->WriteMem(userAddress+i, 1, buffer[i]))
+           break;
+    }    
+}
+
+
+void incPC() {
+    int programCounter = machine->ReadRegister(PC_REG);
+    machine->WriteRegister(PREV_PC_REG, programCounter); 
+    programCounter = machine->ReadRegister(NEXT_PC_REG);
+    machine->WriteRegister(PC_REG, programCounter);
+    machine->WriteRegister(NEXT_PC_REG, programCounter+4);    
+}
+
+
 void
 ExceptionHandler(ExceptionType which)
 {
     int type = machine->ReadRegister(2);
 
-    if (which == SYSCALL_EXCEPTION && type == SC_Halt) {
-        DEBUG('a', "Shutdown, initiated by user program.\n");
-        interrupt->Halt();
+    if (which == SYSCALL_EXCEPTION ) {
+        switch(type) {
+            case SC_Halt: {
+                DEBUG('a', "Shutdown, initiated by user program.\n");
+                interrupt->Halt();
+                break;
+            }
+            case SC_Create: {
+                DEBUG('a', "Syscall Create\n");
+                char buf[MAXNAMELENGTH];
+                int dname = machine->ReadRegister(4);
+                ReadStringFromUser(dname, buf, MAXNAMELENGTH);
+                if (fileSystem->Create(buf, MAXNAMELENGTH)) 
+                    machine->WriteRegister(2, SYSC_OK); // archivo creado exitosamente
+                else 
+                    machine->WriteRegister(2, SYSC_ERROR);
+                incPC();
+                break;
+            }
+        }
     } else {
         printf("Unexpected user mode exception %d %d\n", which, type);
         ASSERT(false);
