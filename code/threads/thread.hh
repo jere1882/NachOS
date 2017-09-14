@@ -40,12 +40,14 @@
 
 
 #include "utility.hh"
+#include "filesys/open_file.hh" // INCLUDE AGREGADO 
 
-#ifdef USER_PROGRAM
+#ifdef USER_PROGRAM 
 #include "machine/machine.hh"
 #include "userprog/address_space.hh"
 #endif
 
+#define MAX_OPEN_FILES 100
 
 /// CPU register state to be saved on context switch.
 ///
@@ -56,13 +58,11 @@ const unsigned MACHINE_STATE_SIZE = 17;
 /// Size of the thread's private execution stack.
 ///
 /// In words.
-///
-/// WATCH OUT IF THIS IS NOT BIG ENOUGH!!!!!
-const unsigned STACK_SIZE = 4 * 1024;
-
-
+/// 
+/// WATCH OUT IF THIS IS NOT BIG ENOUGH!!!!!  
+const unsigned STACK_SIZE = 4 * 1024; 
 /// Thread state.
-enum ThreadStatus {
+enum ThreadStatus { 
     JUST_CREATED,
     RUNNING,
     READY,
@@ -132,8 +132,8 @@ public:
     }
     
     ThreadStatus getStatus (){
-		return status;
-	}
+        return status;
+    }
 
     const char *getName()
     {
@@ -145,15 +145,30 @@ public:
         printf("%s, ", name);
     }
 
-	void Join();
-	
-	int GetPriority(){
-		return priority;
-	}
-	
-	int GetEffectivePriority(){
-		return effectivePriority;
-	}
+    void Join();
+    
+    int GetPriority(){
+        return priority;
+    }
+ 
+   
+    int GetEffectivePriority(){
+        return effectivePriority;
+    }
+    int  AddFile(OpenFile *f);
+    void CloseFile(int fd);
+    OpenFile* GetFile(int fd);
+    
+/*
+    void setExitCode(int code){
+        exitcode = code;
+    }
+    int getExitCode(){
+        return exitcode;
+    }
+*/ 
+
+
 private:
     // Some of the private data for this class is listed above.
 
@@ -173,9 +188,14 @@ private:
 
     Port *port; ///Será usado para implementar join
     int priority;
-	int effectivePriority;
+    int effectivePriority;
 
-#ifdef USER_PROGRAM
+    int exitcode;
+    OpenFile *openFilesTable[MAX_OPEN_FILES];
+
+
+
+ #ifdef USER_PROGRAM
     /// User-level CPU register state.
     ///
     /// A thread running a user program actually has *two* sets of CPU

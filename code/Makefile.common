@@ -52,6 +52,7 @@ THREAD_H = ../threads/copyright.h   \
            ../machine/statistics.hh \
            ../machine/timer.hh      \
            ../threads/preemptive.hh
+
 THREAD_C = ../threads/main.cc        \
            ../threads/scheduler.cc   \
            ../threads/synch.cc       \
@@ -87,7 +88,9 @@ USERPROG_H = ../userprog/address_space.hh \
              ../machine/encoding.hh       \
              ../machine/instruction.hh    \
              ../machine/machine.hh        \
-             ../machine/translation_entry.hh
+             ../machine/translation_entry.hh \
+             ../userprog/synchconsole.hh 
+
 USERPROG_C = ../userprog/address_space.cc \
              ../userprog/bitmap.cc        \
              ../userprog/exception.cc     \
@@ -98,7 +101,9 @@ USERPROG_C = ../userprog/address_space.cc \
              ../machine/instruction.cc    \
              ../machine/machine.cc        \
              ../machine/mips_sim.cc       \
-             ../machine/translate.cc
+             ../machine/translate.cc      \
+             ../userprog/synchconsole.cc      
+
 USERPROG_O = address_space.o \
              bitmap.o        \
              exception.o     \
@@ -109,7 +114,8 @@ USERPROG_O = address_space.o \
              instruction.o   \
              machine.o       \
              mips_sim.o      \
-             translate.o
+             translate.o     \
+             synchconsole.o 
 
 VMEM_H =
 VMEM_C =

@@ -36,6 +36,7 @@ SynchDisk *synchDisk;
 
 #ifdef USER_PROGRAM  // Requires either *FILESYS* or *FILESYS_STUB*.
 Machine *machine;  ///< User program memory and registers.
+SynchConsole *synchconsole;
 #endif
 
 #ifdef NETWORK
@@ -173,6 +174,7 @@ Initialize(int argc, char **argv)
 
 #ifdef USER_PROGRAM
     machine = new Machine(debugUserProg);  // This must come first.
+    synchconsole = new SynchConsole(NULL,NULL);
 #endif
 
 #ifdef FILESYS

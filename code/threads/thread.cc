@@ -43,10 +43,15 @@ Thread::Thread(const char* threadName, bool join, int prio)
 #ifdef USER_PROGRAM
     space    = NULL;
 #endif
-	if (join)
-		port = new Port("JoinPort");
-	else
-		port = NULL;
+
+    int i;
+    for (i=0 ; i < MAX_OPEN_FILES; i++)
+        openFilesTable[i]=NULL;    
+
+    if (join)
+        port = new Port("JoinPort");
+    else
+        port = NULL;
 }
 
 /// De-allocate a thread.
@@ -124,14 +129,14 @@ Thread::CheckOverflow()
 
 void 
 Thread::ChangePriority(int newPriority){
-	if( effectivePriority == priority )
-		effectivePriority = newPriority;
-		
+    if( effectivePriority == priority )
+        effectivePriority = newPriority;
+        
 }
 
 void 
 Thread::ResetPriority(){
-	effectivePriority = priority;
+    effectivePriority = priority;
 }
 /// Called by `ThreadRoot` when a thread is done executing the forked
 /// procedure.
@@ -147,15 +152,15 @@ Thread::ResetPriority(){
 void
 Thread::Finish()
 {
-	
-	
+    
+    
     interrupt->SetLevel(INT_OFF);
     ASSERT(this == currentThread);
 
     DEBUG('t', "Finishing thread \"%s\"\n", getName());
 
-	if (port)
-		port->Send(1);
+    if (port)
+        port->Send(1);
 
     threadToBeDestroyed = currentThread;
     Sleep();  // Invokes `SWITCH`.
@@ -164,9 +169,9 @@ Thread::Finish()
 
 
 void Thread::Join(){
-	ASSERT (port);
-	int temp;
-	port->Receive(&temp);
+    ASSERT (port);
+    int temp;
+    port->Receive(&temp);
 }
 
 /// Relinquish the CPU if any other thread is ready to run.
@@ -194,7 +199,7 @@ Thread::Yield()
 
     DEBUG('t', "Yielding thread \"%s\"\n", getName());
 
-	//scheduler->ReadyToRun(this);                      //AGREGUÉ ESTO Y TODO ANDA BIEN. QUE ONDA?
+
     nextThread = scheduler->FindNextToRun();
     if (nextThread != NULL) {
         scheduler->ReadyToRun(this);
@@ -312,5 +317,31 @@ Thread::RestoreUserState()
     for (unsigned i = 0; i < NUM_TOTAL_REGS; i++)
         machine->WriteRegister(i, userRegisters[i]);
 }
+
+
+int Thread::AddFile(OpenFile *f) {    // Los índices 0 y 1 están ya reservados para stdin stdout, que siempre están abiertos
+    int i;
+    for(i=2; i<MAX_OPEN_FILES; i++)   // Recorremos toda la tabla 
+        if(openFilesTable[i]==NULL){  // Cuando encontramos algúna fila vacía
+            openFilesTable[i]=f;
+            return i;        
+        }
+    // Si salimos de este for, entonces toda la tabla estaba llena.
+    return -1;
+}
+
+void Thread::CloseFile(int fd) {
+    ASSERT(fd > 1 && fd < MAX_OPEN_FILES);
+    ASSERT(openFilesTable[fd]!=NULL); 
+    openFilesTable[fd]=NULL;
+}
+
+OpenFile* Thread::GetFile(int fd) {
+    ASSERT(fd > 1 && fd < MAX_OPEN_FILES);	
+    ASSERT(openFilesTable[fd]!=NULL);
+    return openFilesTable[fd];
+}
+
+
 
 #endif

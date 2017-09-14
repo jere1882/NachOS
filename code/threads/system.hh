@@ -15,7 +15,7 @@
 #include "machine/interrupt.hh"
 #include "machine/statistics.hh"
 #include "machine/timer.hh"
-
+#include "userprog/synchconsole.hh"
 
 /// Initialization and cleanup routines.
 
@@ -36,6 +36,7 @@ extern Timer *timer;                 ///< The hardware alarm clock.
 #ifdef USER_PROGRAM
 #include "machine/machine.hh"
 extern Machine* machine;  // User program memory and registers.
+extern SynchConsole *synchconsole;
 #endif
 
 #ifdef FILESYS_NEEDED  // *FILESYS* or 8FILESYS_STUB*.
