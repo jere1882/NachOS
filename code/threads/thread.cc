@@ -150,7 +150,7 @@ Thread::ResetPriority(){
 /// NOTE: we disable interrupts, so that we do not get a time slice between
 /// setting `threadToBeDestroyed`, and going to sleep.
 void
-Thread::Finish()
+Thread::Finish(int st)
 {
     
     
@@ -160,7 +160,7 @@ Thread::Finish()
     DEBUG('t', "Finishing thread \"%s\"\n", getName());
 
     if (port)
-        port->Send(1);
+        port->Send(st);
 
     threadToBeDestroyed = currentThread;
     Sleep();  // Invokes `SWITCH`.

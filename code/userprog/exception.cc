@@ -223,8 +223,59 @@ ExceptionHandler(ExceptionType which)
             delete buf;
             incPC();
             break;    
+        }
+        case SC_Open: {  //OpenFileId Open(char *name);
+            DEBUG('a', "Syscall Open\n");
+            char name[MAXNAMELENGTH];
+            int dname = machine->ReadRegister(4);
+            ReadStringFromUser(dname, name, MAXNAMELENGTH);
+            DEBUG('a', "Syscall Open. File name is %s\n",name);
+           
+            OpenFile *f = fileSystem->Open(name);
+            if (f == NULL){
+                DEBUG('a', "Syscall Open: Error. Couldn't open file %s\n",name);
+                machine->WriteRegister(2, SYSC_ERROR);               
+            } 
+            else {
+                OpenFileId fd = currentThread -> AddFile(f);
+                if (fd >= 0) {
+                    DEBUG('a', "Syscall Open: File opened. File descriptor assigned is %d \n",fd);
+                    machine->WriteRegister(2,fd);
+                }
+                else {
+                    DEBUG('a', "Syscall Open: Error. Problem getting the file descriptor\n",name);
+                    machine->WriteRegister(2,SYSC_ERROR);
+                } 
             }
-        }           
+               
+            incPC();
+            break;   
+        }
+        case SC_Close: { //void Close(OpenFileId id);
+            DEBUG('a', "Syscall Close\n");
+            OpenFileId fd = machine->ReadRegister(4);
+            OpenFile *f = currentThread->GetFile(fd);
+            if (f) {
+                DEBUG('a', "Syscall Close: Closing file\n");
+                delete f;
+                currentThread->CloseFile(fd);
+                machine->WriteRegister(2, SYSC_OK);                
+            }
+            else{
+                machine->WriteRegister(2, SYSC_ERROR);            
+                DEBUG('a', "Syscall Close: Error getting file.\n");
+            } 
+            incPC();
+            break;                  
+        }
+        case SC_Exit:{ // void Exit(int status)
+            DEBUG('a',"Syscall Exit");
+            int status = machine->ReadRegister(4);
+            currentThread->Finish(status);
+            //incPC();
+            break;
+        }
+      }           
     }    
     else {
         printf("Unexpected user mode exception %d %d\n", which, type);

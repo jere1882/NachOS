@@ -97,7 +97,7 @@ private:
 public:
 
     /// Initialize a `Thread`.
-    Thread(const char *debugName, bool join=0, int prio=0); /// join indica si el thread hará join
+   Thread(const char *debugName, bool join=0, int prio=0); /// join indica si el thread hará join
 
     /// Deallocate a Thread.
     ///
@@ -117,7 +117,7 @@ public:
     void Sleep();
 
     /// The thread is done executing.
-    void Finish();
+    void Finish(int st=0);
 
 
     /// Check if thread has overflowed its stack.
@@ -159,14 +159,8 @@ public:
     void CloseFile(int fd);
     OpenFile* GetFile(int fd);
     
-/*
-    void setExitCode(int code){
-        exitcode = code;
-    }
-    int getExitCode(){
-        return exitcode;
-    }
-*/ 
+
+ 
 
 
 private:
@@ -190,7 +184,6 @@ private:
     int priority;
     int effectivePriority;
 
-    int exitcode;
     OpenFile *openFilesTable[MAX_OPEN_FILES];
 
 
