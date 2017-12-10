@@ -38,6 +38,7 @@ SynchDisk *synchDisk;
 Machine *machine;  ///< User program memory and registers.
 SynchConsole *synchconsole;
 BitMap *bitmap;
+ProcTable *procTable;
 #endif
 
 #ifdef NETWORK
@@ -153,8 +154,8 @@ Initialize(int argc, char **argv)
     stats = new Statistics();     // Collect statistics.
     interrupt = new Interrupt;    // Start up interrupt handling.
     scheduler = new Scheduler();  // Initialize the ready queue.
-    if (randomYield)              // Start the timer (if needed).
-        timer = new Timer(TimerInterruptHandler, 0, randomYield);
+    //if (randomYield)              // Start the timer (if needed).
+        timer = new Timer(TimerInterruptHandler, 0, randomYield); // ->Always
 
     threadToBeDestroyed = NULL;
 
@@ -177,6 +178,7 @@ Initialize(int argc, char **argv)
     machine = new Machine(debugUserProg);  // This must come first.
     synchconsole = new SynchConsole(NULL,NULL);
     bitmap = new BitMap(NUM_PHYS_PAGES);
+    procTable = new ProcTable();
 #endif
 
 #ifdef FILESYS
@@ -209,6 +211,7 @@ Cleanup()
     delete machine;
     delete synchconsole;
     delete bitmap;
+    delete procTable;
 #endif
 
 #ifdef FILESYS_NEEDED

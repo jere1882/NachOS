@@ -49,7 +49,7 @@
 /// * `which` is the kind of exception.  The list of possible exceptions is
 ///   in `machine.hh`.
 
-
+void runProc(void *);
 
 void ReadStringFromUser (int userAddress, char *outString, unsigned maxByteCount) {
     int buf;
@@ -275,6 +275,53 @@ ExceptionHandler(ExceptionType which)
             //incPC();
             break;
         }
+        case SC_Join: { //int Join(SpaceId id);
+			SpaceId s = machine->ReadRegister(4);
+			Thread* t = procTable->Fetch(s);
+			if (t==NULL) {
+				DEBUG('a', "Syscall Join: Unable to fetch thread from procTable .\n");				
+				machine->WriteRegister(2, SYSC_ERROR);       				
+			}
+			else {
+				t->Join();       
+				machine->WriteRegister(2,SYSC_OK);
+			}
+			incPC;
+			break;
+		}
+        case SC_Exec: { // SpaceId Exec(char *name);
+            DEBUG('a',"Syscall Exec");
+            
+			char *name = new char [128];
+            int dname = machine->ReadRegister(4);
+            ReadStringFromUser(dname, name, MAXNAMELENGTH);
+
+            OpenFile *executable = fileSystem->Open(name);
+           
+            if (executable == NULL) {
+                DEBUG('a', "Syscall Exec: Unable to upen file.\n");				
+                machine->WriteRegister(2, SYSC_ERROR);       
+			}
+			else {
+				Thread* t = new Thread(name,true,0);
+				AddressSpace *space = new AddressSpace(executable);
+				t->space = space;
+           		delete executable;
+           		
+				SpaceId sid = procTable->Add(t);
+				if (sid==-1) {
+					DEBUG('a', "Syscall Exec: ProcTable is full.\n");				
+					machine->WriteRegister(2, SYSC_ERROR);      
+				}
+				else {
+					t->Fork(runProc, NULL);
+					DEBUG('a', "Syscall Exec: Success.\n");	
+					machine->WriteRegister(2,sid);	
+				}
+			}
+			incPC();
+			break;
+		}
       }           
     }    
     else {
@@ -282,3 +329,15 @@ ExceptionHandler(ExceptionType which)
         ASSERT(false);
     }
 }
+
+
+void runProc(void* arg)
+{ 
+    currentThread->space->InitRegisters();  // Set the initial register values.
+    currentThread->space->RestoreState();   // Load page table register.
+
+    machine->Run();  // Jump to the user progam.
+    ASSERT(false);   // `machine->Run` never returns; the address space
+                     // exits by doing the system call `Exit`.
+}
+

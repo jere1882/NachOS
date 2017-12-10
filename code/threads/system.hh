@@ -8,7 +8,6 @@
 #ifndef NACHOS_THREADS_SYSTEM__HH
 #define NACHOS_THREADS_SYSTEM__HH
 
-
 #include "utility.hh"
 #include "thread.hh"
 #include "scheduler.hh"
@@ -17,7 +16,7 @@
 #include "machine/timer.hh"
 #include "userprog/synchconsole.hh"
 #include "userprog/bitmap.hh"
-
+#include "userprog/proctable.hh"
 
 /// Initialization and cleanup routines.
 
@@ -42,6 +41,7 @@ extern Timer *timer;                 ///< The hardware alarm clock.
 extern Machine* machine;  // User program memory and registers.
 extern SynchConsole *synchconsole;
 extern BitMap *bitmap;
+extern ProcTable *procTable;
 #endif
 
 #ifdef FILESYS_NEEDED  // *FILESYS* or 8FILESYS_STUB*.

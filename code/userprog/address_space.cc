@@ -74,7 +74,7 @@ AddressSpace::AddressSpace(OpenFile *executable){
     numPages = divRoundUp(size, PAGE_SIZE);
     size = numPages * PAGE_SIZE;
 
-    ASSERT(numPages <= NUM_PHYS_PAGES);    // P! 
+    ASSERT(numPages <= NUM_PHYS_PAGES);    
     
       // Check we are not trying to run anything too big -- at least until we
       // have virtual memory.
