@@ -1,3 +1,5 @@
+// OJO QUE ESTE NO ESTÁ CONFIGURADO PARA SER COMPILADO SI SE MODIFICA
+
 /// Simple program to test whether running a user program works.
 ///
 /// Just do a “syscall” that shuts down the OS.
@@ -15,14 +17,9 @@
 int
 main(void)
 {
-    Create("testJoin.txt");
-    OpenFileId o = Open("testJoin.txt");
-    Write("Probando si anda join!\n",24,o);
-    const SpaceId newProc = Exec("../test/filetest2");
-    Write("Ya hice exec...\n",16,o);
-    Join(newProc);
-    Write("Ya volvio \n",12,o);
+    Create("test.txt");
+    OpenFileId o = Open("test.txt");
+    Write("Probando!\n",10,o);
     Close(o);
-    Halt();
-    // Not reached.
+    Exit();
 }

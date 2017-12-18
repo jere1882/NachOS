@@ -74,7 +74,7 @@ AddressSpace::AddressSpace(OpenFile *executable){
     numPages = divRoundUp(size, PAGE_SIZE);
     size = numPages * PAGE_SIZE;
 
-    ASSERT(numPages <= NUM_PHYS_PAGES);    
+    ASSERT(numPages <= NUM_PHYS_PAGES && "Program doesn't fit in physical memory.");    
     
       // Check we are not trying to run anything too big -- at least until we
       // have virtual memory.
@@ -87,8 +87,9 @@ AddressSpace::AddressSpace(OpenFile *executable){
     pageTable = new TranslationEntry[numPages];
     for (unsigned i = 0; i < numPages; i++) {
         pageTable[i].virtualPage  = i;
-        pageTable[i].physicalPage = bitmap->Find();
-        ASSERT(pageTable[i].physicalPage>=0);
+        int newPage = bitmap->Find();
+        ASSERT(newPage>=0 && "physical memory is full!");  // newPage==-1 => memory is full.
+        pageTable[i].physicalPage = newPage;
         pageTable[i].valid        = true;
         pageTable[i].use          = false;
         pageTable[i].dirty        = false;
@@ -96,6 +97,7 @@ AddressSpace::AddressSpace(OpenFile *executable){
           // If the code segment was entirely on a separate page, we could
           // set its pages to be read-only.
         memset(&(machine -> mainMemory [pageTable[i].physicalPage*PAGE_SIZE]),0,PAGE_SIZE);
+
     }
 
     // Zero out the entire address space, to zero the unitialized data
@@ -134,7 +136,7 @@ AddressSpace::AddressSpace(OpenFile *executable){
 ///
 /// Nothing for now!
 AddressSpace::~AddressSpace(){
-	int i;
+	unsigned i;
 	for(i=0; i<numPages; i++) bitmap->Clear(pageTable[i].physicalPage);
     delete [] pageTable;
 }

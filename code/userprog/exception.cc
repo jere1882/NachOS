@@ -24,6 +24,7 @@
 
 #include "syscall.h"
 #include "threads/system.hh"
+#include "writeargs.h"
 
 #define MAXNAMELENGTH 256   // Length limit for file names
 
@@ -273,20 +274,24 @@ ExceptionHandler(ExceptionType which)
             int status = machine->ReadRegister(4);
             currentThread->Finish(status);
             //incPC();
+            DEBUG('a',"Syscall Exit: Never reached");
             break;
         }
         case SC_Join: { //int Join(SpaceId id);
+			DEBUG('a',"Syscall Join!");
 			SpaceId s = machine->ReadRegister(4);
 			Thread* t = procTable->Fetch(s);
 			if (t==NULL) {
-				DEBUG('a', "Syscall Join: Unable to fetch thread from procTable .\n");				
+				DEBUG('a', "Syscall Join: Unable to fetch.\n");				
 				machine->WriteRegister(2, SYSC_ERROR);       				
 			}
 			else {
+				DEBUG('a',"Syscall Join: About to do the join");
 				t->Join();       
+				DEBUG('a',"Syscall Join: Done");
 				machine->WriteRegister(2,SYSC_OK);
 			}
-			incPC;
+			incPC();
 			break;
 		}
         case SC_Exec: { // SpaceId Exec(char *name);
