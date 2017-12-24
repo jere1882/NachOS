@@ -1,4 +1,3 @@
-// OJO QUE ESTE NO ESTÁ CONFIGURADO PARA SER COMPILADO SI SE MODIFICA
 
 /// Simple program to test whether running a user program works.
 ///
@@ -15,11 +14,11 @@
 
 
 int
-main(void)
+main(int argc, char** argv)
 {
     Create("test.txt");
     OpenFileId o = Open("test.txt");
-    Write("Probando!\n",10,o);
+    Write(argv[0],4,o);
     Close(o);
-    Exit();
+    Exit(0);
 }

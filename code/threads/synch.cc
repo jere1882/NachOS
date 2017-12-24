@@ -104,7 +104,7 @@ Lock::~Lock() {
 void
 
 Lock::Acquire() {
-    DEBUG('t',"Thread %s tries to acquire the lock\n",currentThread->getName());
+    DEBUG('t',"Thread %s tries to acquire the lock %s\n",currentThread->getName(),name);
     ASSERT(!isHeldByCurrentThread());
     if (heldBy!=NULL) {
         DEBUG('t',"The lock has been already acquired by %s. Comparing priorities: ¿owner: %d < %d :current ? \n",heldBy->getName(), heldBy->GetEffectivePriority() , currentThread->GetEffectivePriority());
@@ -116,14 +116,17 @@ Lock::Acquire() {
         }
     }
     sem->P();
-    heldBy = currentThread;        
+    heldBy = currentThread; 
+    DEBUG('t',"Thread %s acquired the lock %s\n",currentThread->getName(),name);       
 }
 
 void
 Lock::Release(){
+	DEBUG('t',"Thread %s tries to release the lock %s\n",currentThread->getName(),name);
     ASSERT(isHeldByCurrentThread());
     heldBy = NULL;
     sem->V();    
+    DEBUG('t',"Thread %s released the lock %s\n",currentThread->getName(),name);
     if (currentThread->GetEffectivePriority() != currentThread->GetPriority()){
         scheduler->ChangePriorityList(heldBy,heldBy->GetEffectivePriority(),heldBy->GetPriority());
         currentThread -> ResetPriority();

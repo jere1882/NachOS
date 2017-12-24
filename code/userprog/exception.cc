@@ -24,7 +24,7 @@
 
 #include "syscall.h"
 #include "threads/system.hh"
-#include "writeargs.h"
+#include "args.hh"
 
 #define MAXNAMELENGTH 256   // Length limit for file names
 
@@ -221,7 +221,7 @@ ExceptionHandler(ExceptionType which)
                         }
                     }
                 }
-            delete buf;
+            delete []buf;
             incPC();
             break;    
         }
@@ -294,20 +294,32 @@ ExceptionHandler(ExceptionType which)
 			incPC();
 			break;
 		}
-        case SC_Exec: { // SpaceId Exec(char *name);
+        case SC_Exec: { //SpaceId Exec(char *name, char **argv);
             DEBUG('a',"Syscall Exec");
             
 			char *name = new char [128];
             int dname = machine->ReadRegister(4);
+            DEBUG('a',"Syscall Exec: before reading program name");
             ReadStringFromUser(dname, name, MAXNAMELENGTH);
-
+	
+			int argd = machine->ReadRegister(5);
+			char ** args = NULL;
             OpenFile *executable = fileSystem->Open(name);
            
             if (executable == NULL) {
                 DEBUG('a', "Syscall Exec: Unable to upen file.\n");				
                 machine->WriteRegister(2, SYSC_ERROR);       
-			}
+			} 
 			else {
+				
+				if (argd) {
+					DEBUG('a',"Syscall Exec: before saving args");	
+					args= SaveArgs(argd);
+				}
+				else 
+					DEBUG('a',"Syscall Exec: Args=NULL");
+
+			    
 				Thread* t = new Thread(name,true,0);
 				AddressSpace *space = new AddressSpace(executable);
 				t->space = space;
@@ -319,7 +331,7 @@ ExceptionHandler(ExceptionType which)
 					machine->WriteRegister(2, SYSC_ERROR);      
 				}
 				else {
-					t->Fork(runProc, NULL);
+					t->Fork(runProc, (void*)args);
 					DEBUG('a', "Syscall Exec: Success.\n");	
 					machine->WriteRegister(2,sid);	
 				}
@@ -336,10 +348,13 @@ ExceptionHandler(ExceptionType which)
 }
 
 
-void runProc(void* arg)
+void runProc(void* args)
 { 
     currentThread->space->InitRegisters();  // Set the initial register values.
     currentThread->space->RestoreState();   // Load page table register.
+
+    if (args!=NULL)
+		WriteArgs((char**)args);
 
     machine->Run();  // Jump to the user progam.
     ASSERT(false);   // `machine->Run` never returns; the address space

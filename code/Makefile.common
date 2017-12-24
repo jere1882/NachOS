@@ -90,7 +90,8 @@ USERPROG_H = ../userprog/address_space.hh \
              ../machine/machine.hh        \
              ../machine/translation_entry.hh \
              ../userprog/synchconsole.hh  \
-             ../userprog/proctable.hh
+             ../userprog/proctable.hh     \
+             ../userprog/args.hh
 
 USERPROG_C = ../userprog/address_space.cc \
              ../userprog/bitmap.cc        \
@@ -104,7 +105,8 @@ USERPROG_C = ../userprog/address_space.cc \
              ../machine/mips_sim.cc       \
              ../machine/translate.cc      \
              ../userprog/synchconsole.cc  \
-             ../userprog/proctable.cc
+             ../userprog/proctable.cc     \
+             ../userprog/args.cc
 USERPROG_O = address_space.o \
              bitmap.o        \
              exception.o     \
@@ -117,7 +119,8 @@ USERPROG_O = address_space.o \
              mips_sim.o      \
              translate.o     \
              synchconsole.o  \
-             proctable.o
+             proctable.o     \
+             args.o
          
 VMEM_H =
 VMEM_C =

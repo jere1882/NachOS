@@ -17,8 +17,11 @@ main(void)
 {
     Create("testJoin.txt");
     OpenFileId o = Open("testJoin.txt");
-    Write("Probando si anda join!\n",24,o);
-    const SpaceId newProc = Exec("../test/filetest2");
+    Write("Probando si anda join!\n",23,o);
+    char *arg = "hola";
+    char **args[2] = {arg,0};
+    //Write(args[0],4,o);
+    const SpaceId newProc = Exec("../test/filetest2",args);
     Write("Ya hice exec...\n",16,o);
     Join(newProc);
     Write("Ya volvio \n",12,o);
