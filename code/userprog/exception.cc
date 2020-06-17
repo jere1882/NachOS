@@ -31,6 +31,8 @@
 #define SYSC_OK      0      // Succesful signal execution return vale 
 #define SYSC_ERROR  -1      // Error signal execution return value
 
+extern unsigned number_running_threads;
+
 /// Entry point into the Nachos kernel.  Called when a user program is
 /// executing, and either does a syscall, or generates an addressing or
 /// arithmetic exception.
@@ -110,22 +112,26 @@ void incPC() {
 void
 ExceptionHandler(ExceptionType which)
 {
+    //DEBUG('s', "Handling exception: \n");
+
     int type = machine->ReadRegister(2);
 
-    if (which == SYSCALL_EXCEPTION ) {
+    switch(which) {
+        case SYSCALL_EXCEPTION: {
+
         switch(type) {
             case SC_Halt: {
-                DEBUG('a', "Shutdown, initiated by user program.\n");
+                DEBUG('s', "Shutdown, initiated by user program.\n");
                 interrupt->Halt();
                 break;
             }
             case SC_Create: {
-                DEBUG('a', "Syscall Create\n");
+                DEBUG('s', "Syscall Create\n");
                 char buf[MAXNAMELENGTH];
                 int dname = machine->ReadRegister(4);
-                DEBUG('a', "Creating File..\n");
+                DEBUG('s', "Creating File..\n");
                 ReadStringFromUser(dname, buf, MAXNAMELENGTH);
-                DEBUG('a', "Creating File: %s\n",buf);                
+                DEBUG('s', "Creating File: %s\n",buf);                
                 if (fileSystem->Create(buf, MAXNAMELENGTH)) 
                     machine->WriteRegister(2, SYSC_OK); // archivo creado exitosamente
                 else 
@@ -134,7 +140,7 @@ ExceptionHandler(ExceptionType which)
                 break;
            }
            case SC_Read: { //int Read(char *buffer, int size, OpenFileId id);
-                DEBUG('a', "Syscall Read\n");
+                DEBUG('s', "Syscall Read\n");
                 int dbuf = machine->ReadRegister(4);
                 int size = machine->ReadRegister(5);
                 OpenFileId fd   = machine->ReadRegister(6); 
@@ -144,19 +150,19 @@ ExceptionHandler(ExceptionType which)
             
                 if (size < 0){
                     machine->WriteRegister(2, SYSC_ERROR);
-                    DEBUG('a', "Syscall Read: Error. Negative size of buffer.\n");
+                    DEBUG('s', "Syscall Read: Error. Negative size of buffer.\n");
                 }
                 else if (fd == ConsoleOutput){ 
                     machine->WriteRegister(2, SYSC_ERROR);
-                    DEBUG('a', "Syscall Read: Error. Attempting to read from screen\n");
+                    DEBUG('s', "Syscall Read: Error. Attempting to read from screen\n");
                 }
                 else if (fd < 0) {
                     machine->WriteRegister(2, SYSC_ERROR);
-                    DEBUG('a', "Syscall Read: Error. Illegal file descriptor.\n");
+                    DEBUG('s', "Syscall Read: Error. Illegal file descriptor.\n");
                 }
                 else {        
                     if (fd == ConsoleInput) {
-                       DEBUG('a', "Syscall Read: Reading from keyboard.\n");
+                       DEBUG('s', "Syscall Read: Reading from keyboard.\n");
                         int i;
                         for(i=0; i < size; i++)
                             buf[i] = synchconsole->GetChar();
@@ -165,13 +171,13 @@ ExceptionHandler(ExceptionType which)
                     else {
                         OpenFile *f = currentThread->GetFile(fd);
                         if (f != NULL){
-                            DEBUG('a', "Syscall Read: Reading from open file.\n");
+                            DEBUG('s', "Syscall Read: Reading from open file.\n");
                             read = f->Read(buf, size);    
                             machine->WriteRegister(2, read);
                         }
                         else {
                             machine->WriteRegister(2, SYSC_ERROR);
-                            DEBUG('a', "Syscall Read: Error. File couldn't be opened.\n");
+                            DEBUG('s', "Syscall Read: Error. File couldn't be opened.\n");
                         }                                
                     }
                     WriteBufferToUser(buf, dbuf, read);
@@ -181,7 +187,7 @@ ExceptionHandler(ExceptionType which)
                 break;
            }     
             case SC_Write: { //void Write(char *buffer, int size, OpenFileId id);
-                DEBUG('a', "Syscall Write\n");
+                DEBUG('s', "Syscall Write\n");
                 int dbuf = machine->ReadRegister(4);
                 int size = machine->ReadRegister(5);
                 OpenFileId fd   = machine->ReadRegister(6); 
@@ -189,20 +195,20 @@ ExceptionHandler(ExceptionType which)
             
                 if (size < 0){
                     machine->WriteRegister(2, SYSC_ERROR);
-                    DEBUG('a', "Syscall Write: Error. Attempting to write a negative amount of chars.\n");
+                    DEBUG('s', "Syscall Write: Error. Attempting to write a negative amount of chars.\n");
                 }
                 else if (fd == ConsoleInput) { // Evitamos que se escriba en "teclado"
                     machine->WriteRegister(2, SYSC_ERROR);
-                    DEBUG('a', "Syscall Write: Error. Attempting to write in keyboard.\n");
+                    DEBUG('s', "Syscall Write: Error. Attempting to write in keyboard.\n");
                 }
                 else if (fd < 0){
                     machine->WriteRegister(2, SYSC_ERROR);
-                    DEBUG('a', "Syscall Write: Error. Invalid file descriptor.\n");
+                    DEBUG('s', "Syscall Write: Error. Invalid file descriptor.\n");
                 }     
                 else {
                     ReadBufferFromUser(dbuf, buf, size);   
                     if(fd == ConsoleOutput) {
-                       DEBUG('a', "Syscall Write: Writing to screen.\n");
+                       DEBUG('s', "Syscall Write: Writing to screen.\n");
                         int i;
                        for(i=0; i < size; i++)
                             synchconsole->PutChar(buf[i]);
@@ -213,11 +219,11 @@ ExceptionHandler(ExceptionType which)
                         if (f!=NULL) {
                             int sizew = f->Write(buf, size);
                             machine->WriteRegister(2, sizew);
-                            DEBUG('a', "Syscall Write: %d chars written to file.\n",sizew);
+                            DEBUG('s', "Syscall Write: %d chars written to file %s.\n",sizew,buf);
                         }
                         else { 
                             machine->WriteRegister(2, SYSC_ERROR);
-                            DEBUG('a', "Syscall Write: Error. File couldn't be opened.\n");                       
+                            DEBUG('s', "Syscall Write: Error. File couldn't be opened.\n");                       
                         }
                     }
                 }
@@ -226,25 +232,25 @@ ExceptionHandler(ExceptionType which)
             break;    
         }
         case SC_Open: {  //OpenFileId Open(char *name);
-            DEBUG('a', "Syscall Open\n");
+            DEBUG('s', "Syscall Open\n");
             char name[MAXNAMELENGTH];
             int dname = machine->ReadRegister(4);
             ReadStringFromUser(dname, name, MAXNAMELENGTH);
-            DEBUG('a', "Syscall Open. File name is %s\n",name);
+            DEBUG('s', "Syscall Open. File name is %s\n",name);
            
             OpenFile *f = fileSystem->Open(name);
             if (f == NULL){
-                DEBUG('a', "Syscall Open: Error. Couldn't open file %s\n",name);
+                DEBUG('s', "Syscall Open: Error. Couldn't open file %s\n",name);
                 machine->WriteRegister(2, SYSC_ERROR);               
             } 
             else {
                 OpenFileId fd = currentThread -> AddFile(f);
                 if (fd >= 0) {
-                    DEBUG('a', "Syscall Open: File opened. File descriptor assigned is %d \n",fd);
+                    DEBUG('s', "Syscall Open: File opened. File descriptor assigned is %d \n",fd);
                     machine->WriteRegister(2,fd);
                 }
                 else {
-                    DEBUG('a', "Syscall Open: Error. Problem getting the file descriptor\n",name);
+                    DEBUG('s', "Syscall Open: Error. Problem getting the file descriptor\n",name);
                     machine->WriteRegister(2,SYSC_ERROR);
                 } 
             }
@@ -253,53 +259,61 @@ ExceptionHandler(ExceptionType which)
             break;   
         }
         case SC_Close: { //void Close(OpenFileId id);
-            DEBUG('a', "Syscall Close\n");
+            DEBUG('s', "Syscall Close\n");
             OpenFileId fd = machine->ReadRegister(4);
             OpenFile *f = currentThread->GetFile(fd);
             if (f) {
-                DEBUG('a', "Syscall Close: Closing file\n");
+                DEBUG('s', "Syscall Close: Closing file\n");
                 delete f;
                 currentThread->CloseFile(fd);
                 machine->WriteRegister(2, SYSC_OK);                
             }
             else{
                 machine->WriteRegister(2, SYSC_ERROR);            
-                DEBUG('a', "Syscall Close: Error getting file.\n");
+                DEBUG('s', "Syscall Close: Error getting file.\n");
             } 
             incPC();
             break;                  
         }
         case SC_Exit:{ // void Exit(int status)
-            DEBUG('a',"Syscall Exit");
+            DEBUG('s',"Syscall Exit\n");
             int status = machine->ReadRegister(4);
-            currentThread->Finish(status);
-            //incPC();
-            DEBUG('a',"Syscall Exit: Never reached");
+
+            if (number_running_threads==1){ // If this is the last thread, halt the machine
+                DEBUG('s',"Exiting last thread with status %d, halting machine\n", status);
+                interrupt->Halt();
+            }
+            else 
+            {
+                currentThread->Finish(status);
+                //incPC();
+                DEBUG('s',"Syscall Exit: Never reached\n");
+            }
             break;
         }
         case SC_Join: { //int Join(SpaceId id);
-			DEBUG('a',"Syscall Join!");
+			DEBUG('s',"Syscall Join!");
 			SpaceId s = machine->ReadRegister(4);
 			Thread* t = procTable->Fetch(s);
 			if (t==NULL) {
-				DEBUG('a', "Syscall Join: Unable to fetch.\n");				
+				DEBUG('s', "Syscall Join: Unable to fetch.\n");				
 				machine->WriteRegister(2, SYSC_ERROR);       				
 			}
 			else {
-				DEBUG('a',"Syscall Join: About to do the join");
+				DEBUG('s',"Syscall Join: About to join\n");
 				t->Join();       
-				DEBUG('a',"Syscall Join: Done");
+				DEBUG('s',"Syscall Join: Done\n");
 				machine->WriteRegister(2,SYSC_OK);
 			}
 			incPC();
 			break;
 		}
         case SC_Exec: { //SpaceId Exec(char *name, char **argv);
-            DEBUG('a',"Syscall Exec");
+            DEBUG('s',"Syscall Exec");
             
 			char *name = new char [128];
             int dname = machine->ReadRegister(4);
-            DEBUG('a',"Syscall Exec: before reading program name");
+            DEBUG('s',"Syscall Exec: before reading program name\n");
             ReadStringFromUser(dname, name, MAXNAMELENGTH);
 	
 			int argd = machine->ReadRegister(5);
@@ -307,43 +321,67 @@ ExceptionHandler(ExceptionType which)
             OpenFile *executable = fileSystem->Open(name);
            
             if (executable == NULL) {
-                DEBUG('a', "Syscall Exec: Unable to upen file.\n");				
+                DEBUG('s', "Syscall Exec: Unable to upen file.\n");				
                 machine->WriteRegister(2, SYSC_ERROR);       
 			} 
 			else {
 				
 				if (argd) {
-					DEBUG('a',"Syscall Exec: before saving args");	
+					DEBUG('s',"Syscall Exec: before saving args\n");	
 					args= SaveArgs(argd);
 				}
 				else 
-					DEBUG('a',"Syscall Exec: Args=NULL");
+					DEBUG('s',"Syscall Exec: Args=NULL\n");
 
 			    
 				Thread* t = new Thread(name,true,0);
-				AddressSpace *space = new AddressSpace(executable);
+				AddressSpace *space = new AddressSpace(executable,name);
+
 				t->space = space;
-           		delete executable;
+           		//delete executable;
            		
 				SpaceId sid = procTable->Add(t);
 				if (sid==-1) {
-					DEBUG('a', "Syscall Exec: ProcTable is full.\n");				
+					DEBUG('s', "Syscall Exec: ProcTable is full.\n");				
 					machine->WriteRegister(2, SYSC_ERROR);      
 				}
 				else {
 					t->Fork(runProc, (void*)args);
-					DEBUG('a', "Syscall Exec: Success.\n");	
+					DEBUG('s', "Syscall Exec: Success.\n");	
 					machine->WriteRegister(2,sid);	
 				}
 			}
 			incPC();
 			break;
 		}
-      }           
-    }    
-    else {
+        default:{
+            printf("Unexpected syscall exception %d %d\n", which, type);
+            ASSERT(false);  
+            break;
+        }
+      }
+      break;           
+    }
+    case PAGE_FAULT_EXCEPTION: {
+        unsigned vaddr = machine->ReadRegister(BAD_VADDR_REG); // Bad virtual addressmake
+        //DEBUG('s', "PAGE_FAULT_EXCEPTION \n");
+        #ifdef USE_TLB  // Es un TLB MISS, aún no sabemos si es un PAGE_FAULT real.
+            currentThread->space->handleTLBMiss(vaddr);
+        #else // No estamos TLB,  estamos tratando de leer una pagina que nunca fue loaded
+            currentThread->space->loadPage(vaddr);
+        #endif
+
+        break;
+    }
+    case READ_ONLY_EXCEPTION: {
+        DEBUG('s', "READ_ONLY_EXCEPTION \n");
+        currentThread->Finish(1);
+        break;
+    }
+    default:
         printf("Unexpected user mode exception %d %d\n", which, type);
         ASSERT(false);
+        break;
     }
 }
 
