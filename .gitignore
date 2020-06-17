@@ -2,6 +2,7 @@ Makefile.depends
 nachos
 *.o
 swtch.s
+*SWAP*
 
 /code/bin/coff2noff
 /code/bin/coff2flat
