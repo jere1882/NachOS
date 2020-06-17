@@ -122,9 +122,9 @@ USERPROG_O = address_space.o \
              proctable.o     \
              args.o
          
-VMEM_H =
-VMEM_C =
-VMEM_O =
+VMEM_H = ../vmem/paginador.hh
+VMEM_C = ../vmem/paginador.cc
+VMEM_O = paginador.o
 
 FILESYS_H = ../filesys/directory.hh   \
             ../filesys/file_header.hh \

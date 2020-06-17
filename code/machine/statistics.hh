@@ -10,6 +10,7 @@
 #ifndef NACHOS_MACHINE_STATS__HH
 #define NACHOS_MACHINE_STATS__HH
 
+#include <vector>
 
 /// The following class defines the statistics that are to be kept about
 /// Nachos behavior -- how much time (ticks) elapsed, how many user
@@ -53,6 +54,23 @@ public:
     /// Number of packets received over the network.
     unsigned numPacketsRecvd;
 
+    /// Number of TLB hits
+    unsigned numTLBHits;
+
+    /// Number of TLB misses
+    unsigned numTLBMisses;
+
+    /// Swap to memory
+    unsigned swaps_in;
+
+    /// Memory to swap
+    unsigned swaps_out;
+
+    // Optimal page replacement algorithm EDS.
+    std::vector<int> referenced_pags;     //Trace of referenced vpns
+    int numPages;
+    int numFrames;
+
 #ifdef DFS_TICKS_FIX
     /// Number of times the tick count gets reset.
     unsigned long tickResets;
@@ -63,6 +81,12 @@ public:
 
     /// Print collected statistics.
     void Print();
+
+private:
+  
+    // It only works for a SINGLE USER PROCESS e.g. sort, matmult
+    void calculateStatsOptimalPGA();
+
 };
 
 /// Constants used to reflect the relative time an operation would take in a
