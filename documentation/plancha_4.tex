@@ -1,0 +1,114 @@
+\documentclass[,colorlinks,linkcolor=blue,citecolor=blue,urlcolor=blue]{article}
+\usepackage[spanish]{babel}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{framed}
+\usepackage[latin1]{inputenc}
+\usepackage{xspace}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage[margin=0.75in]{geometry}
+
+\usepackage{booktabs}
+
+\newcommand{\desig}[2]{\item #1 $\approx #2$}
+\newenvironment{designations}
+  {\begin{leftbar}
+    \begin{list}{}{\setlength{\labelsep}{0cm}
+                   \setlength{\labelwidth}{0cm}
+                   \setlength{\listparindent}{0cm}
+                   \setlength{\rightmargin}{\leftmargin}}}
+  {\end{list}\end{leftbar}}
+
+\newcommand{\setlog}{$\{log\}$\xspace}
+
+\def\titlerunning{\setlog}
+\def\authorrunning{Jeremías Rodríguez}
+
+\title{Sistemas Operativos II - Entrega final}
+\author{Jeremías Rodríguez}
+
+\date{2020}
+
+\begin{document}
+\thispagestyle{empty}
+\maketitle
+
+
+\section*{Planchas previas}
+\begin{itemize}
+\item Cursé la materia en 2017.
+\item La plancha 1 se encuentra \href{https://svn.dcc.fceia.unr.edu.ar/svn/lcc/R-412/Alumnos/2017/Bianchi-Meli-Rodriguez/}{aquí} 
+\item La plancha 2 se encuentra \href{ttps://svn.dcc.fceia.unr.edu.ar/svn/lcc/R-412/Alumnos/2017/Bianchi-Meli-Rodriguez/}{aquí} 
+\item La plancha 3 se encuentra \href{https://svn.dcc.fceia.unr.edu.ar/svn/lcc/R-412/Alumnos/2017/Rodriguez/tags/}{aquí} .
+\end{itemize}
+
+Durante la realización y testeo de la plancha final, encontré algunos errores en estas planchas (por ejemplo en la implementación de locks, o de la syscall exec). Estos errores fueron corregidos directamente en el código de la entrega final.
+
+\section*{Ejercicios 1 y 2}
+La TLB se encuentra habilitada al usar el ejecutable del directorio vm. Cuando una página virtual no se encuentra en la TLB, se lanza una excepción que es manejada por AddressSpace::handleTLBMiss. También se modificaron otros métodos en AddressSpace para especificar el compartamiento de la TLB en cambios de contexto, etc.
+
+La siguiente tabla resume la performance de TLB en dos programas de ejemplo, sort y matmult:
+
+\begin{center}
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|l|l|l|l|l|l|}
+\hline
+TLB SIZE       & 2        & 4        & 8        & 16       & 32       & 64       \\ \hline
+Sort hits      & 17362765 & 20823379 & 21796245 & 21807871 & 21814338 & 21814338 \\ \hline
+Sort misses    & 4454621  & 994007   & 21141    & 9515     & 3048     & 3048     \\ \hline
+Sort ratio     & 0.795822 & 0.9544   & 0.999031 & 0.999564 & 0.999860 & 0.999860 \\ \hline
+Matmult hits   & 619496   & 665591   & 709059   & 721829   & 726075   & 726075   \\ \hline
+Matmult misses & 106694   & 60599    & 17131    & 4361     & 115      & 115      \\ \hline
+Matmult ratio  & 0.853077 & 0.9165   & 0.976410 & 0.993995 & 0.999842 & 0.999842 \\ \hline
+\end{tabular}
+\end{table}
+
+\includegraphics[scale=0.5]{tlb_plot.png}
+\end{center}
+
+Basado en los números que obtuve, parece razonable elegir un tamaño de TLB de 8 o 16 bits. No hay mayor ganancia en elegir tamaños mayores para los programas testeados. De aquí en adelante, usaré TLB size = 8.
+
+\section*{Ejercicios 3}
+Demand Loading fue implementado en la clase AddressSpace, y se habilita o deshabilita definiendo DEMAND\_LOADING. Se usa el campo valid de la page table para indicar que una página nunca fue cargada, si se invoca a loadPage cada vez que una página es referenciada por primera vez. Esta adición permitió ejecutar programas que, en caso de no tener memoria virtual, no podrían haberse corrido, pues a priori ocuparían más memoria de la disponible. Por ejemplo, halt utiliza 11 páginas de memoria de las cuales solo 3 son utilizadas (las otras pertenecen al stack). 
+
+\section*{Ejercicios 4, 5 y 6}
+El uso de memoria virtual está habilitado por default al usar el ejecutable del directorio vm. Agregué la clase Paginador que se encarga de administrar los marcos de memoria física, asignándolos a distintos threads a medida que lo soliciten. De ser necesario se envían páginas a swap, usando alguno de los siguientes algoritmos de reemplazo de páginas que implementé: Random, FIFO o Reloj Mejorado. 
+
+Las siguientes tabla compara el desempeño de los últimos dos. Adicionalmente, la clase statistics guarda la traza de páginas referenciadas para calcular el desempeño del algoritmo de reemplazo óptimo. Mi implementación del algoritmo óptimo dada una traza usa fuerza bruta y es poco eficiente, la idea fue sólo usarla para generar los números de la siguiente tabla.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|l|l|l|l|l|l|}
+\hline
+       & \multicolumn{2}{l|}{sort} & \multicolumn{2}{l|}{matmult size=20} & \multicolumn{2}{l|}{matmult size=30} \\ \hline
+       & \#SwapIn    & \#SwapOut   & \#SwapIn         & \#SwapOut         & \#SwapIn         & \#SwapOut         \\ \hline
+FIFO   & 3005        & 3013        & 65               & 80                & 31920            & 31982             \\ \hline
+Clock  & 2429        & 2437        & 45               & 60                & 6490             & 6552              \\ \hline
+Óptima & 316         & 316         & 28               & 28                & 2972             & 2972              \\ \hline
+\end{tabular}
+\end{table}
+
+Como podemos ver, los números muestran que el algoritmo del reloj mejorado efectivamente mejora la performance respecto a FIFO. 
+
+\section*{Comentarios adicionales}
+
+\begin{itemize}
+\item El cálculo del algoritmo de reemplazo óptimo está desactivado por default porque es bastante costoso.
+\item Agregué varios programas a la carpeta de testing, algunos escritos por mi y otros recolectados de internet (como snake.c que dibuja una viborita que se mueve aleatoriamente en la pantalla). Una de las formas mas exigentes pero efectivas de testear que encontré fue setear el tamaño de la TLB y de la memoria principal a 1. 
+\end{itemize}
+
+\end{document}
+
+
+
+ 
+
+
+
+
+
+
