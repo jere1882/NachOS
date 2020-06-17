@@ -31,9 +31,9 @@
 const unsigned PAGE_SIZE = SECTOR_SIZE;  ///< Set the page size equal to the
                                          ///< disk sector size, for
                                          ///< simplicity.
-const unsigned NUM_PHYS_PAGES = 64;
+const unsigned NUM_PHYS_PAGES = 32;
 const unsigned MEMORY_SIZE = NUM_PHYS_PAGES * PAGE_SIZE;
-const unsigned TLB_SIZE = 4;  ///< if there is a TLB, make it small.
+const unsigned TLB_SIZE = 16;  ///< if there is a TLB, make it small.
 
 enum ExceptionType {
     NO_EXCEPTION,             // Everything ok!
@@ -119,13 +119,18 @@ public:
 
     bool WriteMem(unsigned addr, unsigned size, int value);
 
+
+    bool ReadMemImp(unsigned addr, unsigned size, int *value, bool retrying=false);
+
+    bool WriteMemImp(unsigned addr, unsigned size, int value, bool retrying=false);
+
     /// Translate an address, and check for alignment.
     ///
     /// Set the use and dirty bits in the translation entry appropriately,
     /// and return an exception code if the translation could not be
     /// completed.
     ExceptionType Translate(unsigned virtAddr, unsigned *physAddr,
-                            unsigned size, bool writing);
+                            unsigned size, bool writing, bool retrying=false);
 
     /// Trap to the Nachos kernel, because of a system call or other
     /// exception.
@@ -171,6 +176,7 @@ public:
     TranslationEntry *pageTable;
     unsigned pageTableSize;
 
+    void printtlb();
   private:
     bool singleStep;  ///< Drop back into the debugger after each simulated
                       ///< instruction.

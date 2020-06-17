@@ -117,3 +117,10 @@ Machine::WriteRegister(unsigned num, int value)
     registers[num] = value;
 }
 
+
+void Machine::printtlb() {
+    for (unsigned i = 0 ; i < TLB_SIZE ; i++){
+        TranslationEntry entry =  tlb[i];
+        printf( "TLB entry: vp %d, ph %d, valid %d, ro %d, dirty %d, use %d \n", entry.virtualPage, entry.physicalPage, entry.valid, entry.readOnly, entry.dirty, entry.use);
+    }
+}
