@@ -5,12 +5,11 @@
 /// Ideally, we could read the matrices off of the file system, and store the
 /// result back to the file system!
 
-
 #include "syscall.h"
 
 
 /// Sum total of the arrays does not fit in physical memory.
-#define DIM  20
+#define DIM  30
 
 static int A[DIM][DIM];
 static int B[DIM][DIM];
@@ -34,6 +33,9 @@ main(void)
         for (j = 0; j < DIM; j++)
             for (k = 0; k < DIM; k++)
                 C[i][j] += A[i][k] * B[k][j];
+
+
+    Write("matmult test: finished\n",23,1);
 
     // And then we are done.
     Exit(C[DIM - 1][DIM - 1]);

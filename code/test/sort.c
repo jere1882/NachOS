@@ -32,6 +32,11 @@ main(void)
                 A[j + 1] = tmp;
             }
 
+    if (A[0]==(DIM-1))
+        Write("sort test: PASSED\n",18,1);
+    else
+        Write("sort test: FAILED\n",18,1);
+
     // And then we're done -- should be 0!
     Exit(A[0]);
 }

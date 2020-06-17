@@ -30,9 +30,9 @@ int main (int argc, char **argv)
 			}
 			
             Close(f);
-            Write('\n',1,OUTPUT);
+            
         }
-        
+        Write('\n',1,OUTPUT);
     }
     
 	return 0;

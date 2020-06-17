@@ -16,8 +16,6 @@
 int
 main(int argc, char** argv)
 {
-    Create("test.txt");
-    Write(argv[0],4,1);
-    Write(" Thread filetest2 exiting now\n",31,1);
-    Exit(0);
+    Write(" Thread testJoinExitStatusAux.c exiting now\n",44,1);
+    Exit(-1);
 }

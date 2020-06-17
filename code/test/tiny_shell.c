@@ -1,5 +1,8 @@
 #include "syscall.h"
 
+/* Example: Run from userprog, ./nachos -x ../test/tiny_shell
+   then enter the path to a nachos program such as  ../test/halt
+   it'll execute it, but cannot pass parameters  */
 
 int
 main(void)
@@ -24,8 +27,14 @@ main(void)
         buffer[--i] = '\0';
 
         if (i > 0) {
-            newProc = Exec(buffer);
+            char *arg = "tiny_shell";
+            char **args[2] = {arg,0};
+            newProc = Exec(buffer,args);
             Join(newProc);
         }
     }
 }
+
+
+
+
