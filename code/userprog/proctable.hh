@@ -11,11 +11,11 @@ class ProcTable {
 	
   public:
 	ProcTable();  //constructor	
-    ~ProcTable(); //destructor
-		
-    Thread* Fetch(int i);  
-    SpaceId Add(Thread *t);
-    void Remove(int i);
+  ~ProcTable(); //destructor
+  
+  Thread* Fetch(int i);  
+  SpaceId Add(Thread *t);
+  void Remove(int i);
     
   private:
 	  Thread *procTable[NUM_MAX_PROC];

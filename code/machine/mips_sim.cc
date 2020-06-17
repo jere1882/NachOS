@@ -86,6 +86,7 @@ Machine::OneInstruction(Instruction *instr)
                instr->RegFromType(str->args[2]));
         printf("\n");
     }
+    DEBUG('m', "One instruction \n");
 
     // Compute next pc, but do not install in case there is an error or
     // branch.
@@ -242,7 +243,7 @@ Machine::OneInstruction(Instruction *instr)
             break;
 
         case OP_LUI:
-            DEBUG('m', "Executing: LUI r%d,%d\n", instr->rt, instr->extra);
+           // DEBUG('m', "Executing: LUI r%d,%d\n", instr->rt, instr->extra);
             registers[(int) instr->rt] = instr->extra << 16;
             break;
 

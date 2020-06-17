@@ -36,11 +36,11 @@ public:
 
     /// The page number in real memory (relative to the start of
     /// `mainMemory`).
-    unsigned physicalPage;
+    /// Value -1 means that the page is in swap
+    int physicalPage;
 
-    /// If this bit is set, the translation is ignored.
-    ///
-    /// (In other words, the entry has not been initialized.)
+    /// TLB: If this bit is set, the entry is unused (and all current informations is not valid)
+    /// pageTable: The entry has not been initialized (demand loading)
     bool valid;
 
     /// If this bit is set, the user program is not allowed to modify the

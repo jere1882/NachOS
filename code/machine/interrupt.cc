@@ -22,7 +22,6 @@
 
 #include "interrupt.hh"
 #include "threads/system.hh"
-
 #include <limits.h>
 
 
@@ -81,7 +80,7 @@ void
 Interrupt::ChangeLevel(IntStatus old, IntStatus now)
 {
     level = now;
-    DEBUG('i', "\tinterrupts: %s -> %s\n",
+    DEBUG('i', "\tChanging interrupt level: %s -> %s\n",
           INT_LEVEL_NAMES[old], INT_LEVEL_NAMES[now]);
 }
 
