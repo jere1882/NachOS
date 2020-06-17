@@ -67,8 +67,6 @@ Scheduler::ReadyToRun(Thread *thread)
 Thread *
 Scheduler::FindNextToRun()
 {
-
-	
 	int i;
 
 	for (i=MAX_PRIO; i>=0 ; i--)
@@ -79,10 +77,6 @@ Scheduler::FindNextToRun()
 	
 }
 
-
-
-	
-	
 /// Dispatch the CPU to `nextThread`.
 ///
 /// Save the state of the old thread, and load the state of the new thread,
@@ -130,6 +124,7 @@ Scheduler::Run(Thread *nextThread){
     // now (for example, in `Thread::Finish`), because up to this point, we
     // were still running on the old thread's stack!
     if (threadToBeDestroyed != NULL) {
+        DEBUG('t', "Deleting thread \"%s\"\n", threadToBeDestroyed->getName());
         delete threadToBeDestroyed;
         threadToBeDestroyed = NULL;
     }
@@ -139,6 +134,8 @@ Scheduler::Run(Thread *nextThread){
         // If there is an address space to restore, do it.
         currentThread->RestoreUserState();
         currentThread->space->RestoreState();
+        DEBUG('t', "Restoring registers and memory of thread \"%s\"\n", currentThread->getName());
+
     }
 #endif
 }

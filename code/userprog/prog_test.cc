@@ -23,15 +23,16 @@ StartProcess(const char *filename)
 {
     OpenFile *executable = fileSystem->Open(filename);
     AddressSpace *space;
-
+    
     if (executable == NULL) {
         printf("Unable to open file %s\n", filename);
         return;
     }
-    space = new AddressSpace(executable);
+    space = new AddressSpace(executable,filename);
+    
     currentThread->space = space;
 
-    delete executable;
+    //delete executable;
 
     space->InitRegisters();  // Set the initial register values.
     space->RestoreState();   // Load page table register.
