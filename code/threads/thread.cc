@@ -22,6 +22,7 @@
 #include "synch.hh"
 #include "system.hh"
 
+unsigned number_running_threads = 0;
 
 /// This is put at the top of the execution stack, for detecting stack
 /// overflows.
@@ -33,6 +34,7 @@ const unsigned STACK_FENCEPOST = 0xdeadbeef;
 /// * `threadName` is an arbitrary string, useful for debugging.
 Thread::Thread(const char* threadName, bool join, int prio)
 {
+    DEBUG('t', "Creating thread \"%s\"\n", threadName);
     name     = threadName;
     stackTop = NULL;
     stack    = NULL;
@@ -52,6 +54,8 @@ Thread::Thread(const char* threadName, bool join, int prio)
         port = new Port("JoinPort");
     else
         port = NULL;
+    
+    number_running_threads++;
 }
 
 /// De-allocate a thread.
@@ -65,10 +69,19 @@ Thread::Thread(const char* threadName, bool join, int prio)
 Thread::~Thread()
 {
     DEBUG('t', "Deleting thread \"%s\"\n", name);
+    ASSERT(this != currentThread);
+    if(port != NULL)
+        delete port;
+        
+    #ifdef USER_PROGRAM
+        delete space;
+    #endif
 
     ASSERT(this != currentThread);
     if (stack != NULL)
         DeallocBoundedArray((char *) stack, STACK_SIZE * sizeof *stack);
+    
+    number_running_threads--;
 }
 
 /// Invoke `(*func)(arg)`, allowing caller and callee to execute
@@ -170,6 +183,8 @@ Thread::Finish(int st)
 
 void Thread::Join(){
     ASSERT (port);
+    DEBUG('t', "Joining thread \"%s\"\n", name);
+
     int temp;
     port->Receive(&temp);
 }
@@ -248,6 +263,7 @@ Thread::Sleep()
 static void
 ThreadFinish()
 {
+    DEBUG('t', "Finishing thread \"%s\"\n", currentThread->getName());
     currentThread->Finish();
 }
 
