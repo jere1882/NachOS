@@ -9,7 +9,6 @@
 #include "system.hh"
 #include "preemptive.hh"
 
-
 /// This defines *all* of the global data structures used by Nachos.
 ///
 /// These are all initialized and de-allocated by this file.
@@ -41,6 +40,10 @@ BitMap *bitmap;
 ProcTable *procTable;
 #endif
 
+#ifdef VMEM
+Paginador *paginador;  // Holds a coremap
+#endif
+
 #ifdef NETWORK
 PostOffice *postOffice;
 #endif
@@ -62,11 +65,16 @@ extern void Cleanup();
 ///
 /// * `dummy` is because every interrupt handler takes one argument, whether
 ///   it needs it or not.
+
 static void
 TimerInterruptHandler(void *dummy)
 {
-    if (interrupt->getStatus() != IDLE_MODE)
+    static unsigned tick_counter =0;
+
+    if (tick_counter==0 && interrupt->getStatus() != IDLE_MODE)
         interrupt->YieldOnReturn();
+
+    tick_counter=(tick_counter+1)%QUANTUM; // SO that we interrupt every QUANTUM ticks
 }
 
 /// Initialize Nachos global data structures.
@@ -155,7 +163,7 @@ Initialize(int argc, char **argv)
     interrupt = new Interrupt;    // Start up interrupt handling.
     scheduler = new Scheduler();  // Initialize the ready queue.
     //if (randomYield)              // Start the timer (if needed).
-        timer = new Timer(TimerInterruptHandler, 0, randomYield); // ->Always
+    timer = new Timer(TimerInterruptHandler, 0, randomYield); // ->Always
 
     threadToBeDestroyed = NULL;
 
@@ -179,6 +187,10 @@ Initialize(int argc, char **argv)
     synchconsole = new SynchConsole(NULL,NULL);
     bitmap = new BitMap(NUM_PHYS_PAGES);
     procTable = new ProcTable();
+#endif
+
+#ifdef VMEM
+    paginador = new Paginador();
 #endif
 
 #ifdef FILESYS
@@ -212,6 +224,10 @@ Cleanup()
     delete synchconsole;
     delete bitmap;
     delete procTable;
+#endif
+
+#ifdef VMEM
+    delete paginador;
 #endif
 
 #ifdef FILESYS_NEEDED

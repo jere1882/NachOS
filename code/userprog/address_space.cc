@@ -17,9 +17,11 @@
 
 
 #include "address_space.hh"
-#include "bin/noff.h"
 #include "threads/system.hh"
 
+#define DEMAND_LOADING
+
+static unsigned global_pids = 0;
 
 /// Do little endian to big endian conversion on the bytes in the object file
 /// header, in case the file was generated on a little endian machine, and we
@@ -53,92 +55,245 @@ SwapHeader(NoffHeader *noffH)
 ///
 /// * `executable` is the file containing the object code to load into
 ///   memory.
-AddressSpace::AddressSpace(OpenFile *executable){
+AddressSpace::AddressSpace(OpenFile *exe, const char *name){
 	
-    NoffHeader noffH;
-    unsigned   size;
+    m_name = name;
+    m_pid = global_pids++;
+    executable = exe;
+
 
     executable->ReadAt((char *) &noffH, sizeof noffH, 0);
-    if (noffH.noffMagic != NOFFMAGIC &&
-          WordToHost(noffH.noffMagic) == NOFFMAGIC)
+    if (noffH.noffMagic != NOFFMAGIC && WordToHost(noffH.noffMagic) == NOFFMAGIC)
         SwapHeader(&noffH);
-    ASSERT(noffH.noffMagic == NOFFMAGIC);     // Lee el ejecutable y acomoda cuestiones de formato.
 
-    // How big is address space? Suma el tamaño delos segmentos de código, datos inicializados y datos no inicis, stack
+    ASSERT(noffH.noffMagic == NOFFMAGIC);     
 
-    size = noffH.code.size + noffH.initData.size + noffH.uninitData.size
-           + USER_STACK_SIZE;
-           
-           
-      // We need to increase the size to leave room for the stack.
-    numPages = divRoundUp(size, PAGE_SIZE);
-    size = numPages * PAGE_SIZE;
+    unsigned size;          // Size in bytes of the whole program
+    unsigned initSizeBytes; // Data segment size in bytes
+    unsigned codeSizeBytes; // Code segment size in bytes
+    unsigned unitSizeBytes; // Uninitialized data size in bytes
+    unsigned numPagesZero;  // Uninitialized data size in pages
 
+	nCodePages = divRoundUp(noffH.code.size, PAGE_SIZE);
+	codeSizeBytes = nCodePages * PAGE_SIZE;
+
+    nDataPages = divRoundUp(noffH.initData.size, PAGE_SIZE);
+    initSizeBytes = nDataPages * PAGE_SIZE;
+
+    unitSizeBytes = noffH.uninitData.size + USER_STACK_SIZE; 
+
+    numPagesZero = divRoundUp(unitSizeBytes, PAGE_SIZE);
+    unitSizeBytes = numPagesZero * PAGE_SIZE;
+
+    size = initSizeBytes + codeSizeBytes + unitSizeBytes;
+    numPages = nCodePages + nDataPages + numPagesZero;
+
+    DEBUG('a', "Initializing address space, num pages %u, size %u\n", numPages, size);
+    stats->numPages = numPages;
+    stats->numFrames = NUM_PHYS_PAGES;
+
+#ifndef VMEM
     ASSERT(numPages <= NUM_PHYS_PAGES && "Program doesn't fit in physical memory.");    
+#else
+    DEBUG('v', "Total size in pages is %d \n",numPages);
+#endif
+
+    // CREAR EL ARCHIVO DE SWAP
+#ifdef VMEM
+    char swapFilename[32];
+    sprintf(swapFilename, "SWAP.%d", m_pid);
+    ASSERT(fileSystem->Create(swapFilename, MEMORY_SIZE));
+    swap_file = fileSystem->Open(swapFilename);
+    DEBUG('v', "Creating swap file %s total size is %d\n",swapFilename,numPages*PAGE_SIZE);
+
+    ASSERT(swap_file != NULL);
+
+    for (unsigned i = 0; i < numPages; i++)
+        for (unsigned j = 0; j < PAGE_SIZE; j++){
+            swap_file->Write("0", 1);
+        }
+#endif
+
+#ifdef DEMAND_LOADING
+    init_demand_loading();
+#else
+    init_non_demand_loading();
+#endif
+
+}
+
+
+void AddressSpace::init_demand_loading(){
     
-      // Check we are not trying to run anything too big -- at least until we
-      // have virtual memory.
-
-    DEBUG('a', "Initializing address space, num pages %u, size %u\n",
-          numPages, size);
-
-    // First, set up the translation.
-
     pageTable = new TranslationEntry[numPages];
+
     for (unsigned i = 0; i < numPages; i++) {
         pageTable[i].virtualPage  = i;
+        pageTable[i].physicalPage = -1;
+        pageTable[i].valid        = false;  // false means 'never loaded'
+        pageTable[i].use          = false;
+        pageTable[i].dirty        = true;
+        pageTable[i].readOnly     = false;
+    }
+
+}
+void AddressSpace::init_non_demand_loading(){
+
+    pageTable = new TranslationEntry[numPages];
+
+    for (unsigned i = 0; i < numPages; i++) {
+        pageTable[i].virtualPage  = i;
+
+#ifndef VMEM
         int newPage = bitmap->Find();
+        DEBUG('a', "Not enough space in physical memory to load the program\n");
         ASSERT(newPage>=0 && "physical memory is full!");  // newPage==-1 => memory is full.
+#else
+        int newPage = paginador->FindFreeFrame(this,i); 
+#endif // VMEM
         pageTable[i].physicalPage = newPage;
         pageTable[i].valid        = true;
         pageTable[i].use          = false;
         pageTable[i].dirty        = false;
         pageTable[i].readOnly     = false;
-          // If the code segment was entirely on a separate page, we could
-          // set its pages to be read-only.
+
         memset(&(machine -> mainMemory [pageTable[i].physicalPage*PAGE_SIZE]),0,PAGE_SIZE);
 
     }
 
-    // Zero out the entire address space, to zero the unitialized data
-    // segment and the stack segment.
-    // memset(machine->mainMemory, 0, size);  P! Esto se borra, porque ahora solo pongo en cero las paginas que corresponden.
-
-    // Then, copy in the code and data segments into memory.
+    // copy in the code and data segments into memory.
 	char temp;
 	int frame, off;
 	
-    if (noffH.code.size > 0) {     // Copia todo el código a la memoria
+    // copiar el segmento de código
+    if (noffH.code.size > 0) {     
         DEBUG('a', "Initializing code segment, at 0x%X, size %u\n", noffH.code.virtualAddr, noffH.code.size);
         for (int j=0; j<noffH.code.size; j++){
-			executable->ReadAt(&temp,1,noffH.code.inFileAddr+j);                     //Leemos un byte del archivo
-			frame = pageTable[(noffH.code.virtualAddr + j) / PAGE_SIZE].physicalPage; // Calculamos el frame
+			ASSERT(executable->ReadAt(&temp,1,noffH.code.inFileAddr+j)==1);                     //Leemos un byte del archivo
+
+            int vpn = (noffH.code.virtualAddr + j) / PAGE_SIZE;
+			frame = pageTable[vpn].physicalPage; // Calculamos el frame
 			off = (noffH.code.virtualAddr + j) % PAGE_SIZE;
+
+#ifndef VMEM
+            ASSERT(frame>=0)
+#else
+            DEBUG('v', "Filling code virtual page %d whose registered frame is %d \n",vpn,frame);
+            if (frame < 0) {  // This vpn no longer has a frame associated in memory
+                frame = paginador->FindFreeFrame(this,vpn);
+                DEBUG('v', "Paginador le consiguio un frame nuevo, %d \n",frame);
+                SwapToMemory(vpn,frame);
+            }
+#endif // VMEM
+            pageTable[vpn].dirty = true;
 			machine->mainMemory[frame * PAGE_SIZE +off] = temp;
         }                             
     }
-    
+
+    // copiar el segmento de datos initializados
     if (noffH.initData.size > 0) {
         DEBUG('a', "Initializing data segment, at 0x%X, size %u\n", noffH.initData.virtualAddr, noffH.initData.size);
         
         for (int j=0; j<noffH.initData.size; j++){
-			executable->ReadAt(&temp,1,noffH.initData.inFileAddr+j);                     //Leemos un byte del archivo
-			frame = pageTable[(noffH.initData.virtualAddr + j) / PAGE_SIZE].physicalPage; // Calculamos el frame
+			ASSERT(executable->ReadAt(&temp,1,noffH.initData.inFileAddr+j)==1);  //Leemos un byte del archivo
+            int vpn = (noffH.initData.virtualAddr + j) / PAGE_SIZE;
+			frame = pageTable[vpn].physicalPage; // Calculamos el frame
 			off = (noffH.initData.virtualAddr + j) % PAGE_SIZE;
-			machine->mainMemory[frame * PAGE_SIZE +off] = temp;
+
+#ifndef VMEM
+            ASSERT(frame>=0)
+#else
+            DEBUG('v', "Filling data virtual page %d whose registered frame is %d \n",vpn,frame);
+            if (frame < 0) {  // This vpn no longer has a frame associated in memory :
+                frame = paginador->FindFreeFrame(this,vpn);
+                DEBUG('v', "Paginador le consiguio un frame nuevo, %d \n",frame);
+                SwapToMemory(vpn,frame); // Solo copia ceros, pero acomoda todas las tablas.
+            }
+#endif //VMEM
+            pageTable[vpn].dirty = true; // Set to true because it has not been copied to swap yet!
+			machine->mainMemory[frame * PAGE_SIZE +off] = temp; // Acá le pone los valores reales.
         }     
         
     }
+}
+
+
+// Loads the page of a particular address to the binary
+void
+AddressSpace::loadPage(unsigned vaddr)
+{
+
+    DEBUG('a', "Loading page associated to vaddr 0x%X \n",vaddr);
+    int virtualPage = vaddr / PAGE_SIZE;
+
+#ifndef VMEM
+    int frame = bitmap->Find();
+    ASSERT(frame>=0 && "physical memory is full!");  // newPage==-1 => memory is full.
+#else
+    int frame = paginador->FindFreeFrame(this,virtualPage); 
+#endif // VMEM
+
+    ASSERT(frame >= 0);
+
+    pageTable[virtualPage].physicalPage = frame; 
+
+    DEBUG('a', "[Demand loading] vpn %d about to be loaded to frame %d\n",virtualPage,frame);
+    //DEBUG('a', "[Prior loading] memory[frame] has value = %8.8x\n", machine->mainMemory[frame]);
+
+
+    if (virtualPage < nCodePages){
+
+        DEBUG('a', "[Demand loading] page was found in code segment \n");
+
+        executable->ReadAt(
+            &(machine->mainMemory[pageTable[virtualPage].physicalPage*PAGE_SIZE]),
+                PAGE_SIZE, noffH.code.inFileAddr + virtualPage*PAGE_SIZE);
+        //DEBUG('a', "[Post loading] memory[frame] has value = %8.8x\n", machine->mainMemory[frame]);
+
+    }
+    else if (virtualPage < nDataPages + nCodePages){
+        DEBUG('a', "[Demand loading] page was found in initialised data segment \n");
+        executable->ReadAt(
+            &(machine->mainMemory[pageTable[virtualPage].physicalPage*PAGE_SIZE]),
+        PAGE_SIZE, noffH.initData.inFileAddr + (virtualPage-nCodePages)*PAGE_SIZE);
+        //  DEBUG('a', "[Post loading] memory[frame] has value = %8.8x\n", machine->mainMemory[frame]);
+    } 
+    else 
+    {
+        DEBUG('a', "[Demand loading] page was found in uninitialised data segment \n");
+        memset(machine->mainMemory + (pageTable[virtualPage].physicalPage)*PAGE_SIZE, 0, PAGE_SIZE);
+      //  DEBUG('a', "[Post loading] memory[frame] has value = %8.8x\n", machine->mainMemory[frame]);
+
+    }
+  pageTable[virtualPage].valid = true;  
 
 }
 
+
 /// Deallocate an address space.
-///
-/// Nothing for now!
 AddressSpace::~AddressSpace(){
+
+    DEBUG('a', "Deleting AddressSpace");
 	unsigned i;
-	for(i=0; i<numPages; i++) bitmap->Clear(pageTable[i].physicalPage);
+	for(i=0; i<numPages; i++) {
+#ifndef VMEM
+        bitmap->Clear(pageTable[i].physicalPage);
+#else
+        if (pageTable[i].physicalPage>=0 && pageTable[i].valid)
+        {
+            paginador->ReleaseFrame(pageTable[i].physicalPage);
+        }
+#endif
+    }
+
     delete [] pageTable;
+
+#ifdef VMEM
+    delete swap_file;
+#endif
+
+    delete executable;
+
 }
 
 /// Set the initial values for the user-level register set.
@@ -172,7 +327,16 @@ AddressSpace::InitRegisters(){
 ///
 /// For now, nothing!
 void AddressSpace::SaveState()
-{}
+{
+#ifdef USE_TLB
+    DEBUG('a', "AddressSpace::SaveState \n");
+    for (unsigned i = 0 ; i < TLB_SIZE ; i++){
+        if(machine->tlb[i].valid) {
+            pageTable[machine->tlb[i].virtualPage] = machine->tlb[i];
+        }
+    }
+#endif
+}
 
 /// On a context switch, restore the machine state so that this address space
 /// can run.
@@ -180,6 +344,136 @@ void AddressSpace::SaveState()
 /// For now, tell the machine where to find the page table.
 void AddressSpace::RestoreState()
 {
+    DEBUG('a', "AddressSpace::RestoreState \n");
+#ifdef USE_TLB
+    for (unsigned i = 0 ; i < TLB_SIZE ; i++)
+        machine->tlb[i].valid = false;
+#else
     machine->pageTable     = pageTable;
     machine->pageTableSize = numPages;
+#endif
 }
+
+void AddressSpace::handleTLBMiss(unsigned vaddr) 
+{
+
+    unsigned int vpn = vaddr/PAGE_SIZE;  // Virtual page number
+
+    DEBUG('a', "Handling TLB miss, looking for VA 0x%X \n",vaddr);
+
+    // Make sure vpn is within bounds
+    if (vpn <0 || vpn > numPages) {
+        DEBUG('a', "Error: Requested vpn is not within bounds, numpages= %d \n", numPages);
+        currentThread->Finish(1);
+        return;
+    }
+
+    TranslationEntry& entry = pageTable[vpn];
+    DEBUG('a', "pagetable[%d] renders an entry whose vpn is %d \n",vpn,entry.virtualPage);
+    ASSERT(pageTable[vpn].virtualPage == vpn)
+
+
+    // If it has never been loaded, do it
+#ifdef DEMAND_LOADING
+    if (!entry.valid){
+        DEBUG('a', "[Demand loading] vpn is not loaded in memory \n",vpn,entry.virtualPage);
+        loadPage(vaddr);
+    }
+#endif
+    ASSERT(pageTable[vpn].valid)
+    ASSERT(pageTable[vpn].virtualPage == vpn)
+
+#ifdef VMEM
+    // Bring it from swap, if necessary
+    if (entry.physicalPage==-1){
+        entry.physicalPage = paginador->FindFreeFrame(this,vpn);
+        SwapToMemory(vpn,entry.physicalPage);
+        DEBUG('v', "virtual page %d was restored to frame %d, set to valid? %d \n",vpn,entry.physicalPage,entry.valid);
+    }
+#endif
+    ASSERT(pageTable[vpn].virtualPage == vpn)
+
+    // Try to find an empty spot in the tlb
+    for(unsigned i = 0; i < TLB_SIZE; i++){
+        if(!machine->tlb[i].valid){
+            DEBUG('a', "Filling empty TLB entry %d with vpage %d \n",i,vpn);
+            machine->tlb[i] = entry;
+            return;
+        }
+    }
+
+    // If there is no empty spot, randomly choose one
+    unsigned r = rand() % TLB_SIZE;
+    // Update the page table (so as to save any changes in bits
+    // We know it is valid, it would've returned in the previous if not
+    pageTable[machine->tlb[r].virtualPage] = machine->tlb[r];
+
+    ASSERT(pageTable[machine->tlb[r].virtualPage].virtualPage == machine->tlb[r].virtualPage)
+
+    // Update the TLB
+    machine->tlb[r] = entry;
+    DEBUG('a', "Overwriting TLB entry %d with vpage %d pointing at frame %d\n",r,entry.virtualPage,entry.physicalPage);
+
+}
+
+#ifdef VMEM
+
+void AddressSpace::SwapToMemory(unsigned vpn, int physicalPage)
+{
+    ASSERT(0 <= physicalPage && physicalPage < (int)NUM_PHYS_PAGES);
+    ASSERT( vpn < numPages);
+    
+    pageTable[vpn].physicalPage = physicalPage;
+
+    int ret = swap_file->ReadAt(&(machine->mainMemory[physicalPage * PAGE_SIZE]), PAGE_SIZE, vpn*PAGE_SIZE);
+    ASSERT(ret == PAGE_SIZE);
+    DEBUG('v',"Retrieving vpn %d into frame %d, addrspaceid %d from swap\n", vpn, physicalPage,m_pid);
+
+    //DEBUG('v', "Memory retrieved looks like: %d \n",machine->mainMemory[0]);
+
+
+    pageTable[vpn].dirty = false;
+    pageTable[vpn].valid = true;
+    pageTable[vpn].use   = true;
+
+    stats->swaps_in++;
+
+    ASSERT(pageTable[vpn].virtualPage == vpn)
+
+}
+
+void AddressSpace::MemoryToSwap(unsigned vpn)
+{
+    ASSERT(vpn < numPages);
+
+    int physicalPage = pageTable[vpn].physicalPage;
+    ASSERT(0 <= physicalPage && physicalPage < (int)NUM_PHYS_PAGES);
+
+    DEBUG('v',"[MemoryToSwap] About to send vpn %d, located in frame %d, addrspaceid %d to swap\n", vpn, physicalPage,m_pid);
+    // Invalidar la entrada de la TLB si corresponde
+#ifdef USE_TLB
+    if(currentThread->space == this){
+        for(unsigned i=0; i<TLB_SIZE; i++) {
+            if((machine->tlb[i].virtualPage == vpn) && machine->tlb[i].valid) {
+                DEBUG('v',"There is a TLB entry for vpn %d. Copy back to pagetable & invalidate\n",machine->tlb[i].virtualPage); 
+                pageTable[vpn] = machine->tlb[i];
+                machine->tlb[i].valid = false;
+            }
+        }
+    }
+#endif   
+
+    if(pageTable[vpn].dirty){ 
+        DEBUG('v',"[MemoryToSwap] vpn was dirty so we're actually copying it\n");
+        int ret =  swap_file->WriteAt(&(machine->mainMemory[physicalPage * PAGE_SIZE]), PAGE_SIZE, vpn*PAGE_SIZE);
+        ASSERT(ret == PAGE_SIZE);
+    }
+   
+    pageTable[vpn].physicalPage = -1;
+    stats->swaps_out++;
+
+    ASSERT(pageTable[vpn].virtualPage == vpn)
+
+}
+
+#endif

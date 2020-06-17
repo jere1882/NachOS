@@ -8,6 +8,8 @@
 #ifndef NACHOS_THREADS_SYSTEM__HH
 #define NACHOS_THREADS_SYSTEM__HH
 
+#define QUANTUM 20
+
 #include "utility.hh"
 #include "thread.hh"
 #include "scheduler.hh"
@@ -44,6 +46,10 @@ extern BitMap *bitmap;
 extern ProcTable *procTable;
 #endif
 
+#ifdef VMEM
+#include "vmem/paginador.hh"
+extern Paginador *paginador;
+#endif
 #ifdef FILESYS_NEEDED  // *FILESYS* or 8FILESYS_STUB*.
 #include "filesys/file_system.hh"
 extern FileSystem *fileSystem;
