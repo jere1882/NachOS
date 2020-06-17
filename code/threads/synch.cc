@@ -35,6 +35,8 @@ Semaphore::Semaphore(const char *debugName, int initialValue)
     name  = debugName;
     value = initialValue;
     queue = new List<Thread *>;
+    DEBUG('s',"Semaphore %s constructed with initial value %d\n",currentThread->getName(), name,initialValue);
+
 }
 
 /// De-allocate semaphore, when no longer needed.
@@ -55,6 +57,7 @@ Semaphore::~Semaphore()
 void
 Semaphore::P()
 {
+    DEBUG('s',"%s does semaphore %s P\n", currentThread->getName(),name);
     IntStatus oldLevel = interrupt->SetLevel(INT_OFF);
       // Disable interrupts.
 
@@ -75,6 +78,8 @@ Semaphore::P()
 void
 Semaphore::V()
 {
+    DEBUG('s',"%s does Semaphore %s V\n",currentThread->getName(), name);
+
     Thread   *thread;
     IntStatus oldLevel = interrupt->SetLevel(INT_OFF);
 
@@ -104,33 +109,35 @@ Lock::~Lock() {
 void
 
 Lock::Acquire() {
-    DEBUG('t',"Thread %s tries to acquire the lock %s\n",currentThread->getName(),name);
+    DEBUG('s',"Thread %s tries to acquire the lock %s\n",currentThread->getName(),name);
     ASSERT(!isHeldByCurrentThread());
     if (heldBy!=NULL) {
-        DEBUG('t',"The lock has been already acquired by %s. Comparing priorities: ¿owner: %d < %d :current ? \n",heldBy->getName(), heldBy->GetEffectivePriority() , currentThread->GetEffectivePriority());
+        DEBUG('s',"The lock has been already acquired by %s. Comparing priorities: ¿owner: %d < %d :current ? \n",heldBy->getName(), heldBy->GetEffectivePriority() , currentThread->GetEffectivePriority());
         if (heldBy->GetEffectivePriority() < currentThread->GetEffectivePriority() ) {
-            DEBUG('t',"Upgrading owner's priority\n");
+            DEBUG('s',"Upgrading owner's priority\n");
             heldBy->ChangePriority(currentThread->GetEffectivePriority());
             scheduler->ChangePriorityList(heldBy,heldBy->GetPriority(),heldBy->GetEffectivePriority());
-            scheduler->ReadyToRun(currentThread); // Sin esta linea no anda. ¿Está bien?
+            //scheduler->ReadyToRun(currentThread); 
         }
     }
     sem->P();
     heldBy = currentThread; 
-    DEBUG('t',"Thread %s acquired the lock %s\n",currentThread->getName(),name);       
+    DEBUG('s',"Thread %s acquired the lock %s\n",currentThread->getName(),name);       
 }
 
 void
 Lock::Release(){
-	DEBUG('t',"Thread %s tries to release the lock %s\n",currentThread->getName(),name);
+	DEBUG('s',"Thread %s tries to release the lock %s\n",currentThread->getName(),name);
     ASSERT(isHeldByCurrentThread());
-    heldBy = NULL;
-    sem->V();    
-    DEBUG('t',"Thread %s released the lock %s\n",currentThread->getName(),name);
+
+    DEBUG('s',"Thread %s released the lock %s\n",currentThread->getName(),name);
     if (currentThread->GetEffectivePriority() != currentThread->GetPriority()){
         scheduler->ChangePriorityList(heldBy,heldBy->GetEffectivePriority(),heldBy->GetPriority());
         currentThread -> ResetPriority();
     }
+
+    heldBy = NULL;
+    sem->V();    
 }
 
 bool Lock::isHeldByCurrentThread(){
@@ -139,9 +146,10 @@ bool Lock::isHeldByCurrentThread(){
 
 
 Condition::Condition(const char *debugName, Lock *conditionLock){
+    DEBUG('s',"Constructing conditional variable %s\n",debugName);
     queue = new List<Semaphore*>;    
     name = debugName;
-    lock = conditionLock;
+    lock = conditionLock;    
 }
 
 Condition::~Condition(){
@@ -179,39 +187,61 @@ void Condition::Broadcast(){
 
 
 Port::Port(const char* debugName){
-    name = debugName; 
-    lock = new Lock("Port");
     full = false;
-    readReady  = new Condition("cond read",lock);
-    writeReady = new Condition("cond write",lock);
+    name = debugName; 
+    lock = new Lock("PortLock");
+    write_allowed = new Condition("write_allowed", lock);
+    read_allowed = new Condition("read_allowed", lock);
+    message_received = new Condition("message_received", lock);
 }
+
 
 Port::~Port(){
     delete lock;
-    delete readReady;
-    delete writeReady;
+    delete write_allowed;
+	delete read_allowed;
+	delete message_received;
 }
 
-void Port::Send(int msg){
+void Port::Send(int data){
+
     lock->Acquire();
-    if(full)
-        writeReady->Wait();
-    buffer = msg;
+
+    // Wait until the receiver allows us to write and the buffer is empty
+    while(full)
+        write_allowed->Wait();
+    
+    // Write our message
+    buffer = data;
     full = true;
-    readReady->Signal();
+
+    // Tell the receiver that it's allowed to start reading
+    read_allowed->Signal();
+
+    // Wait until the message is acknowledged
+    message_received->Wait();
+
     lock->Release();
 }
 
 
-void Port::Receive(int *msg){
+void Port::Receive(int *data){
+
     lock -> Acquire();
-    if(!full)
-        readReady->Wait();
-    *msg = buffer;
+
+    // Wait until the buffer has contents AND the sender lets us read
+    while(!full)
+        read_allowed->Wait();
+
+    // Read the message
     full = false;
-    writeReady->Signal();
+    *data = buffer;
+
+    // Acknowledge the message
+    message_received->Signal();
+
+    // Let any other sender start writing
+    write_allowed->Signal();
+
     lock->Release();
 }
-
-
-

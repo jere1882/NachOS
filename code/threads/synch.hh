@@ -167,18 +167,30 @@ private:
 };
 
 class Port {
+
   public:
+
     Port(const char *debugName);
     ~Port();
     void Send(int msg);
     void Receive(int *msg);
     
   private:
+
+    // Debug
     const char *name;
+
+    // Synch
+    // We need three conditions because a single port may be used by more than one sender!
     Lock *lock;
-    bool full; //Lleno?
-    Condition *readReady, *writeReady;
-    int buffer;
+    Condition *read_allowed;
+    Condition *message_received;
+    Condition *write_allowed;
+
+    // Buffering
+    int buffer; 
+    bool full;  // Is the buffer full?
+
 };
 
 
