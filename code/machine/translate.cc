@@ -32,7 +32,6 @@
 #include "threads/system.hh"
 #include "userprog/address_space.hh"
 
-
 /// Routines for converting Words and Short Words to and from the simulated
 /// machine's format of little endian.  These end up being NOPs when the host
 /// machine is also little endian (DEC and Intel).
@@ -90,13 +89,30 @@ ShortToMachine(unsigned short shortword)
 bool
 Machine::ReadMem(unsigned addr, unsigned size, int *value)
 {
+
+    DEBUG('a', "Reading VA 0x%X, size %u\n", addr, size);
+
+#ifdef USE_TLB
+    bool success = ReadMemImp(addr,size,value, false);
+    if (!success) {
+        DEBUG('a', "Reattempting to read VA 0x%X, in case there was a TLB miss, size %u\n", addr, size);
+        success = ReadMemImp(addr,size,value, true);
+        ASSERT(success);
+    }
+    return success;
+#else
+    return ReadMemImp(addr,size,value);
+#endif
+}
+
+bool
+Machine::ReadMemImp(unsigned addr, unsigned size, int *value, bool retrying)
+{
     int           data;
     ExceptionType exception;
     unsigned      physicalAddress;
 
-    DEBUG('a', "Reading VA 0x%X, size %u\n", addr, size);
-
-    exception = Translate(addr, &physicalAddress, size, false);
+    exception = Translate(addr, &physicalAddress, size, false, retrying);
     if (exception != NO_EXCEPTION) {
         machine->RaiseException(exception, addr);
         return false;
@@ -124,6 +140,28 @@ Machine::ReadMem(unsigned addr, unsigned size, int *value)
     return true;
 }
 
+
+
+
+bool
+Machine::WriteMem(unsigned addr, unsigned size, int value)
+{
+    DEBUG('a', "Writing VA 0x%X, size %u, value 0x%X\n", addr, size, value);
+
+    #ifdef USE_TLB
+        bool success = WriteMemImp(addr,size,value, false);
+        if (!success) {
+            // machine->printtlb();
+            DEBUG('a', "REATTEMPT: Writing VA 0x%X, size %u, value 0x%X\n", addr, size,value);
+            success = WriteMemImp(addr,size,value, true);
+            ASSERT(success);
+        }
+        return success;
+    #else
+        return WriteMemImp(addr,size,value);
+    #endif
+
+}
 /// Write `size` (1, 2, or 4) bytes of the contents of `value` into virtual
 /// memory at location `addr`.
 ///
@@ -134,14 +172,13 @@ Machine::ReadMem(unsigned addr, unsigned size, int *value)
 /// * `size` is the number of bytes to be written (1, 2, or 4).
 /// * `value` is the data to be written.
 bool
-Machine::WriteMem(unsigned addr, unsigned size, int value)
+Machine::WriteMemImp(unsigned addr, unsigned size, int value, bool retrying)
 {
     ExceptionType exception;
     unsigned      physicalAddress;
 
-    DEBUG('a', "Writing VA 0x%X, size %u, value 0x%X\n", addr, size, value);
 
-    exception = Translate(addr, &physicalAddress, size, true);
+    exception = Translate(addr, &physicalAddress, size, true,retrying);
     if (exception != NO_EXCEPTION) {
         machine->RaiseException(exception, addr);
         return false;
@@ -183,9 +220,9 @@ Machine::WriteMem(unsigned addr, unsigned size, int value)
 /// * `writing` -- if true, check the “read-only” bit in the TLB.
 ExceptionType
 Machine::Translate(unsigned virtAddr, unsigned *physAddr,
-                   unsigned size, bool writing)
+                   unsigned size, bool writing, bool retrying)
 {
-    unsigned          i, vpn, offset, pageFrame;
+    unsigned i, vpn, offset, pageFrame;
     TranslationEntry *entry;
 
     DEBUG('a', "\tTranslate 0x%X, %s: ",
@@ -206,28 +243,35 @@ Machine::Translate(unsigned virtAddr, unsigned *physAddr,
     vpn    = (unsigned) virtAddr / PAGE_SIZE;
     offset = (unsigned) virtAddr % PAGE_SIZE;
 
+    // Para el cálculo del algoritmo óptimo offline
+    stats->referenced_pags.push_back(vpn);
+
     if (tlb == NULL) {        // => page table => `vpn` is index into table.
-        if (vpn >= pageTableSize) {
+        if (vpn >= pageTableSize || vpn < 0) {
             DEBUG('a',
                   "virtual page # %u too large for page table size %u!\n",
                   virtAddr, pageTableSize);
             return ADDRESS_ERROR_EXCEPTION;
         } else if (!pageTable[vpn].valid) {
-            DEBUG('a',
-                  "virtual page # %u too large for page table size %u!\n",
-                  virtAddr, pageTableSize);
             return PAGE_FAULT_EXCEPTION;
         }
         entry = &pageTable[vpn];
-    } else {
-        for (entry = NULL, i = 0; i < TLB_SIZE; i++)
+    } 
+    else    // => using tlb!
+    {
+        for (entry = NULL, i = 0; i < TLB_SIZE; i++) {
             if (tlb[i].valid && tlb[i].virtualPage == vpn) {
-                entry = &tlb[i];  // FOUND!
+                entry = &tlb[i];  
+                DEBUG('a',
+                  "TLB hit, entry %d, vpn %d ->frame %d !\n",i, tlb[i].virtualPage, tlb[i].physicalPage);
+                if (!retrying) stats->numTLBHits++;
                 break;
             }
+        }
         if (entry == NULL) {  // Not found.
             DEBUG('a',
-                  "*** no valid TLB entry found for this virtual page!\n");
+                  "TLB miss, couldn't finde vpn %d!\n",vpn);
+            if (!retrying) stats->numTLBMisses++;
             return PAGE_FAULT_EXCEPTION;  // Really, this is a TLB fault, the
                                           // page may be in memory, but not
                                           // in the TLB.
